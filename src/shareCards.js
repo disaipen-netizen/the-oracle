@@ -55,20 +55,17 @@ function drawWatermark(ctx, W, H) {
   ctx.fillText('theoracle.app', W/2, H-52)
 }
 
-function exportCanvas(canvas, filename) {
-  return new Promise(resolve => {
-    canvas.toBlob(blob => {
-      const file = new File([blob], filename, {type:'image/png'})
-      if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})) {
-        navigator.share({files:[file], title:'THE ORACLE'}).catch(()=>{
-          downloadBlob(blob, filename)
-        })
-      } else {
-        downloadBlob(blob, filename)
-      }
-      resolve()
-    }, 'image/png')
-  })
+async function canvasToBlob(canvas) {
+  return new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
+}
+
+async function exportCanvas(canvas, filename) {
+  const blob = await canvasToBlob(canvas)
+  const file = new File([blob], filename, {type:'image/png'})
+  if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})) {
+    try { await navigator.share({files:[file], title:'THE ORACLE'}); return } catch(e) {}
+  }
+  downloadBlob(blob, filename)
 }
 
 function downloadBlob(blob, filename) {
@@ -76,6 +73,7 @@ function downloadBlob(blob, filename) {
   const a = document.createElement('a')
   a.href=url; a.download=filename
   document.body.appendChild(a); a.click(); document.body.removeChild(a)
+  setTimeout(()=>URL.revokeObjectURL(url), 1000)
 }
 
 // ── DIALOG CARDS (3 сообщения на карточку) ──
