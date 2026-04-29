@@ -193,14 +193,13 @@ function buildImprintCard(archetype, label, text, cardNum, total, isGrowth) {
   const tc=tmp.getContext('2d')
   const lines=wrapText(tc,text,FONT,MW-56)
 
-  const labelH=isGrowth?92:82
-  const H=Math.max(340+labelH+lines.length*LH+120, 700)
+  const labelH=isGrowth?118:82
+  const H=Math.max(340+labelH+lines.length*LH+36+120, 700)
   const canvas=document.createElement('canvas'); canvas.width=W; canvas.height=H
   const ctx=canvas.getContext('2d')
 
   drawBg(ctx,W,H)
 
-  // Stronger glow for growth card
   if(isGrowth) {
     const g2=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,500)
     g2.addColorStop(0,'rgba(201,168,76,0.06)'); g2.addColorStop(1,'transparent')
@@ -209,7 +208,6 @@ function buildImprintCard(archetype, label, text, cardNum, total, isGrowth) {
 
   drawBorder(ctx,W,H)
   if(isGrowth) {
-    // Extra gold border for growth
     ctx.strokeStyle='rgba(201,168,76,0.5)'; ctx.lineWidth=1.5
     ctx.strokeRect(44,44,W-88,H-88)
   }
@@ -225,7 +223,6 @@ function buildImprintCard(archetype, label, text, cardNum, total, isGrowth) {
   ctx.lineTo(W/2-50,sY); ctx.lineTo(W/2-4,sY-6); ctx.closePath(); ctx.stroke()
   ctx.fillStyle='#c9a84c'; ctx.beginPath(); ctx.arc(W/2,sY,4,0,Math.PI*2); ctx.fill()
 
-  // Header
   ctx.textAlign='center'
   ctx.font='22px Tenor Sans,Arial,sans-serif'; ctx.fillStyle='rgba(201,168,76,0.45)'
   ctx.fillText('✦  ЦИФРОВОЙ СЛЕПОК ТЕНИ  ✦', W/2, 210)
@@ -237,49 +234,44 @@ function buildImprintCard(archetype, label, text, cardNum, total, isGrowth) {
   ctx.fillText(`${cardNum} / ${total}`, W/2, 302)
   drawDivider(ctx,W,322)
 
-  // Content box
-  const boxY=338, boxH=labelH+lines.length*LH+30
+  const boxY=338, boxH=labelH+lines.length*LH+36
   ctx.fillStyle=`rgba(201,168,76,${isGrowth?'0.07':'0.04'})`
   roundRect(ctx,PAD,boxY,MW,boxH,10); ctx.fill()
   ctx.strokeStyle=`rgba(201,168,76,${isGrowth?'0.48':'0.22'})`; ctx.lineWidth=isGrowth?1.5:1
   roundRect(ctx,PAD,boxY,MW,boxH,10); ctx.stroke()
 
-  // Top shimmer
   const sh=ctx.createLinearGradient(PAD,0,PAD+MW,0)
   sh.addColorStop(0,'transparent'); sh.addColorStop(.5,`rgba(201,168,76,${isGrowth?'0.38':'0.22'})`); sh.addColorStop(1,'transparent')
   ctx.strokeStyle=sh; ctx.lineWidth=isGrowth?1.5:1
   ctx.beginPath(); ctx.moveTo(PAD+20,boxY); ctx.lineTo(PAD+MW-20,boxY); ctx.stroke()
 
-  // Label — prominent
   if(isGrowth) {
-    ctx.font='500 28px Tenor Sans,Arial,sans-serif'; ctx.fillStyle='rgba(201,168,76,0.5)'; ctx.textAlign='center'
+    ctx.font='500 26px Tenor Sans,Arial,sans-serif'; ctx.fillStyle='rgba(201,168,76,0.5)'; ctx.textAlign='center'
     ctx.fillText('✦', W/2, boxY+30)
-    ctx.font='500 32px Tenor Sans,Arial,sans-serif'; ctx.fillStyle='rgba(201,168,76,0.92)'
+    ctx.font='500 30px Tenor Sans,Arial,sans-serif'; ctx.fillStyle='rgba(201,168,76,0.92)'
     ctx.shadowColor='rgba(201,168,76,0.4)'; ctx.shadowBlur=10
-    ctx.fillText(label.toUpperCase(), W/2, boxY+65)
+    ctx.fillText(label.toUpperCase(), W/2, boxY+66)
     ctx.shadowBlur=0
-    ctx.font='500 28px Tenor Sans,Arial,sans-serif'; ctx.fillStyle='rgba(201,168,76,0.5)'
-    ctx.fillText('✦', W/2, boxY+88)
+    ctx.font='500 26px Tenor Sans,Arial,sans-serif'; ctx.fillStyle='rgba(201,168,76,0.5)'
+    ctx.fillText('✦', W/2, boxY+96)
   } else {
     ctx.fillStyle='rgba(201,168,76,0.7)'
-    ctx.fillRect(PAD, boxY+14, 4, 48)
-    ctx.font='600 30px Tenor Sans,Arial,sans-serif'; ctx.fillStyle='rgba(201,168,76,0.92)'; ctx.textAlign='left'
+    ctx.fillRect(PAD, boxY+16, 4, 44)
+    ctx.font='600 28px Tenor Sans,Arial,sans-serif'; ctx.fillStyle='rgba(201,168,76,0.92)'; ctx.textAlign='left'
     ctx.shadowColor='rgba(201,168,76,0.3)'; ctx.shadowBlur=8
     ctx.fillText(label, PAD+22, boxY+48)
     ctx.shadowBlur=0
   }
 
-  // Separator
   const sepG=ctx.createLinearGradient(PAD+20,0,PAD+MW-20,0)
   sepG.addColorStop(0,'transparent'); sepG.addColorStop(.4,'rgba(201,168,76,0.22)'); sepG.addColorStop(.6,'rgba(201,168,76,0.22)'); sepG.addColorStop(1,'transparent')
   ctx.strokeStyle=sepG; ctx.lineWidth=0.8
-  ctx.beginPath(); ctx.moveTo(PAD+20,boxY+labelH-12); ctx.lineTo(PAD+MW-20,boxY+labelH-12); ctx.stroke()
+  ctx.beginPath(); ctx.moveTo(PAD+20,boxY+labelH-8); ctx.lineTo(PAD+MW-20,boxY+labelH-8); ctx.stroke()
 
-  // Text
   ctx.font=FONT; ctx.fillStyle=isGrowth?'#f5ede0':'#ede5d3'
   ctx.textAlign=isGrowth?'center':'left'
   const tx=isGrowth?W/2:PAD+28
-  lines.forEach((l,i)=>ctx.fillText(l,tx,boxY+labelH+i*LH))
+  lines.forEach((l,i)=>ctx.fillText(l,tx,boxY+labelH+16+i*LH))
 
   drawWatermark(ctx,W,H)
   return canvas
