@@ -1,4 +1,4 @@
-  :root {
+ :root {
     color-scheme: dark;
     --ink: #080810;
     --parchment: #f5f0e4;
@@ -862,3 +862,10 @@
 /* ── IMPRINT ── */
 .imprint-label { font-size: 11px; letter-spacing: 0.3em; color: rgba(201,168,76,0.6); text-transform: uppercase; text-align: center; margin-bottom: 6px; }
 .imprint-archetype { font-family: 'Cormorant Garamond', serif; font-size: 32px; font-weight: 300; color: var(--gold); text-shadow: 0 0 30px rgba(201,168,76,0.3); text-align: center; margin-bottom: 24px; letter-spacing: 0.08em; }
+
+/* Shadow done area */
+.shadow-done-area {
+  width: 100%; margin-top: 8px;
+  opacity: 0;
+  animation: rise 0.5s ease 0.3s forwards;
+}
