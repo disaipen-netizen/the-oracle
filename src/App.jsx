@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import './oracle.css'
+import { shareDialogCards, shareImprintCards } from './shareCards.js'
 
 const G = '#c9a84c'
 const dg = o => `rgba(201,168,76,${o})`
@@ -454,7 +455,7 @@ export default function App(){
             {shadowDone&&(
               <div className="shadow-done-area">
                 <div className="share-row">
-                  <button className="btn-share-story" onClick={()=>shareText(dialogText,'Аудиенция с Тенью')}><span>✦</span><span>{t.btnShareDialog}</span></button>
+                  <button className="btn-share-story" onClick={()=>shareDialogCards(shadowHistory,shadowVoiceName).then(n=>showToast(`✦  ${n} карточки сохранены`))}><span>✦</span><span>{t.btnShareDialog}</span></button>
                   <button className="btn-share-copy" onClick={()=>copyToClipboard(dialogText)}><span>⎘</span><span>{t.btnCopy}</span></button>
                 </div>
                 <button className="btn-shadow-cta" style={{marginTop:12,opacity:1,animation:'none'}} onClick={generateImprint}>
@@ -487,7 +488,7 @@ export default function App(){
               <div className="shadow-question">{imprint.growth}</div>
             </div>
             <div className="share-row" style={{animationDelay:'0.9s'}}>
-              <button className="btn-share-story" onClick={()=>shareText(imprintText,'Мой Цифровой Слепок Тени')}><span>✦</span><span>{t.btnShareImprint}</span></button>
+              <button className="btn-share-story" onClick={()=>shareImprintCards(imprint).then(n=>showToast(`✦  ${n} карточки сохранены`))}><span>✦</span><span>{t.btnShareImprint}</span></button>
               <button className="btn-share-copy" onClick={()=>copyToClipboard(imprintText)}><span>⎘</span><span>{t.btnCopyImprint}</span></button>
             </div>
             <button className="btn-ghost" onClick={restart} style={{animationDelay:'1.1s'}}><span>{t.btnRestart}</span></button>
