@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import './oracle.css'
-import { shareDialogCards, shareImprintCards } from './shareCards.js'
+import { shareDialogCards, shareImprintCards, shareResultCard } from './shareCards.js'
 
 const G = '#c9a84c'
 const dg = o => `rgba(201,168,76,${o})`
@@ -154,6 +154,17 @@ const SIGIL=(size=76)=>(
   </svg>
 )
 
+function copyToClipboard(text){
+  if(navigator.clipboard?.writeText){
+    navigator.clipboard.writeText(text).then(()=>alert('Скопировано в буфер обмена'))
+  } else {
+    const ta=document.createElement('textarea');ta.value=text;ta.style.cssText='position:fixed;opacity:0'
+    document.body.appendChild(ta);ta.focus();ta.select()
+    try{document.execCommand('copy');alert('Скопировано')}catch(e){}
+    document.body.removeChild(ta)
+  }
+}
+
 export default function App(){
   const [lang,setLangState]=useState('RU')
   const [screen,setScreen]=useState('welcome')
@@ -180,7 +191,7 @@ export default function App(){
 
   const stars=Array.from({length:60},(_,i)=>({id:i,top:Math.random()*100,left:Math.random()*100,size:Math.random()<0.12?2:1,dur:2+Math.random()*4,delay:Math.random()*5,minOp:0.05+Math.random()*0.08,maxOp:0.25+Math.random()*0.45}))
 
-  function showToast(msg){setToast(msg);setTimeout(()=>setToast(''),2800)}
+  function showToast(msg){setToast(msg);setTimeout(()=>setToast(''),3000)}
   function setLang(l){setLangState(l)}
   function buildDeck(){setShuffledDeck([...ARCANA].sort(()=>Math.random()-0.5))}
 
@@ -292,25 +303,36 @@ export default function App(){
     }catch(e){showToast('Не удалось сформировать слепок')}
   }
 
-  function copyToClipboard(text){
-    if(navigator.clipboard?.writeText){navigator.clipboard.writeText(text).then(()=>showToast('✦  Скопировано в буфер обмена'))}
-    else{const ta=document.createElement('textarea');ta.value=text;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.focus();ta.select();try{document.execCommand('copy');showToast('✦  Скопировано')}catch(e){}document.body.removeChild(ta)}
-  }
-
-  function shareText(text,title){
-    if(navigator.share){navigator.share({title,text}).catch(()=>copyToClipboard(text))}
-    else copyToClipboard(text)
-  }
-
   function restart(){
     setScreen('welcome');setQuestion('');setSelectedCards([])
     setResult(null);setError('');setShadowMessages([])
     setShadowHistory([]);setShadowIteration(0);setImprint(null);setShadowDone(false)
   }
 
-  const resultText=result?[`THE ORACLE — ${resultCards.map(c=>c.name).join(' · ')}`,'',result.grid,'',result.blind,'',result.action,'',`✦ ${result.shadow}`].join('\n'):''
-  const imprintText=imprint?[`ЦИФРОВОЙ СЛЕПОК · ${imprint.archetype}`,'',imprint.resource,'',imprint.block,'',`✦ ${imprint.growth}`].join('\n'):''
+  // Share handlers — все async, вызываются напрямую
+  async function handleShareResult(){
+    try{
+      await shareResultCard(result, resultCards, lang)
+    }catch(e){ copyToClipboard([`THE ORACLE — ${resultCards.map(c=>c.name).join(' · ')}`,result?.grid,result?.blind,result?.action,`✦ ${result?.shadow}`].join('\n\n')) }
+  }
+
+  async function handleShareDialog(){
+    try{
+      const n = await shareDialogCards(shadowHistory, shadowVoiceName)
+      showToast(`✦  ${n} карточки сохранены`)
+    }catch(e){ showToast('Не удалось поделиться') }
+  }
+
+  async function handleShareImprint(){
+    if(!imprint){showToast('Слепок ещё не готов');return}
+    try{
+      const n = await shareImprintCards(imprint)
+      showToast(`✦  ${n} карточки сохранены`)
+    }catch(e){ showToast('Не удалось поделиться') }
+  }
+
   const dialogText=shadowHistory.length?[`АУДИЕНЦИЯ С ТЕНЬЮ · ${shadowVoiceName}`,'',...shadowHistory.map(h=>`${h.role==='assistant'?shadowVoiceName:'Я'}: ${h.content}`),'','theoracle.app'].join('\n'):''
+  const imprintText=imprint?[`ЦИФРОВОЙ СЛЕПОК · ${imprint?.archetype}`,'',imprint?.resource,'',imprint?.block,'',`✦ ${imprint?.growth}`].join('\n'):''
 
   return(
     <div className="app-root">
@@ -319,7 +341,6 @@ export default function App(){
       <div className="lang-bar">{['RU','KZ','EN'].map(l=><button key={l} className={`lang-btn${lang===l?' active':''}`} onClick={()=>setLang(l)}>{l}</button>)}</div>
       <div className="app">
 
-        {/* WELCOME */}
         {screen==='welcome'&&(
           <div className="screen active">
             <div className="sigil" style={{marginTop:52}}>{SIGIL(76)}</div>
@@ -334,7 +355,6 @@ export default function App(){
           </div>
         )}
 
-        {/* CARDS */}
         {screen==='cards'&&(
           <div className="screen active">
             <div className="sigil" style={{marginTop:44}}>{SIGIL(44)}</div>
@@ -371,7 +391,6 @@ export default function App(){
           </div>
         )}
 
-        {/* LOADING */}
         {screen==='loading'&&(
           <div className="screen active" style={{minHeight:'100vh',justifyContent:'center',gap:28}}>
             <svg className="loading-sigil" width="96" height="96" viewBox="0 0 96 96" fill="none">
@@ -385,7 +404,6 @@ export default function App(){
           </div>
         )}
 
-        {/* RESULT */}
         {screen==='result'&&result&&(
           <div className="screen active">
             <div className="sigil" style={{marginTop:44}}>{SIGIL(44)}</div>
@@ -413,9 +431,10 @@ export default function App(){
                 <div className="shadow-question"><StreamText text={result.shadow} delay={3800} speed={60}/></div>
               </div>
             )}
-            <div className="share-row">
-              <button className="btn-share-story" onClick={()=>shareText(resultText,'THE ORACLE · Мой расклад')}><span>✦</span><span>{t.btnStory}</span></button>
-              <button className="btn-share-copy" onClick={()=>copyToClipboard(resultText)}><span>⎘</span><span>{t.btnCopy}</span></button>
+            {/* Кнопки без анимации чтобы точно кликались */}
+            <div style={{display:'flex',gap:10,width:'100%',marginTop:16}}>
+              <button className="btn-share-story" style={{flex:1}} onClick={handleShareResult}><span>✦</span><span>{t.btnStory}</span></button>
+              <button className="btn-share-copy" style={{flex:1}} onClick={()=>copyToClipboard([`THE ORACLE — ${resultCards.map(c=>c.name).join(' · ')}`,result?.grid,result?.blind,result?.action,`✦ ${result?.shadow}`].join('\n\n'))}><span>⎘</span><span>{t.btnCopy}</span></button>
             </div>
             <button className="btn-shadow-cta" onClick={startShadowAudience}>
               <span className="btn-shadow-icon">🌑</span>
@@ -426,7 +445,6 @@ export default function App(){
           </div>
         )}
 
-        {/* SHADOW */}
         {screen==='shadow'&&(
           <div className="screen active">
             <div className="shadow-session-header">
@@ -453,12 +471,12 @@ export default function App(){
               </div>
             )}
             {shadowDone&&(
-              <div className="shadow-done-area">
-                <div className="share-row">
-                  <button className="btn-share-story" onClick={()=>shareDialogCards(shadowHistory,shadowVoiceName).then(n=>showToast(`✦  ${n} карточки сохранены`))}><span>✦</span><span>{t.btnShareDialog}</span></button>
-                  <button className="btn-share-copy" onClick={()=>copyToClipboard(dialogText)}><span>⎘</span><span>{t.btnCopy}</span></button>
+              <div style={{width:'100%',marginTop:16}}>
+                <div style={{display:'flex',gap:10,width:'100%',marginBottom:12}}>
+                  <button className="btn-share-story" style={{flex:1}} onClick={handleShareDialog}><span>✦</span><span>{t.btnShareDialog}</span></button>
+                  <button className="btn-share-copy" style={{flex:1}} onClick={()=>copyToClipboard(dialogText)}><span>⎘</span><span>{t.btnCopy}</span></button>
                 </div>
-                <button className="btn-shadow-cta" style={{marginTop:12,opacity:1,animation:'none'}} onClick={generateImprint}>
+                <button className="btn-shadow-cta" style={{opacity:1,animation:'none'}} onClick={generateImprint}>
                   <span className="btn-shadow-icon">🌑</span>
                   <div className="btn-shadow-content"><span className="btn-shadow-title">{t.btnGetImprint}</span><span className="btn-shadow-sub">Твой архетипический портрет</span></div>
                   <span className="btn-shadow-arrow">→</span>
@@ -468,30 +486,29 @@ export default function App(){
           </div>
         )}
 
-        {/* IMPRINT */}
         {screen==='imprint'&&imprint&&(
           <div className="screen active">
             <div className="sigil" style={{marginTop:44}}>{SIGIL(44)}</div>
             <div className="divider" style={{margin:'14px 0'}}><div className="divider-line"/><div className="divider-gem">◆</div><div className="divider-line"/></div>
             <div className="imprint-label">{t.imprintLabel}</div>
             <div className="imprint-archetype">{imprint.archetype}</div>
-            <div className="reading-block" style={{animationDelay:'0.3s',width:'100%'}}>
+            <div className="reading-block" style={{width:'100%'}}>
               <span className="block-tag">{t.imprintResource}</span>
               <div className="block-body">{imprint.resource}</div>
             </div>
-            <div className="reading-block" style={{animationDelay:'0.5s',width:'100%'}}>
+            <div className="reading-block" style={{width:'100%'}}>
               <span className="block-tag">{t.imprintBlock}</span>
               <div className="block-body">{imprint.block}</div>
             </div>
-            <div className="shadow-block" style={{animationDelay:'0.7s'}}>
+            <div className="shadow-block">
               <span className="shadow-label">{t.imprintGrowth}</span>
               <div className="shadow-question">{imprint.growth}</div>
             </div>
-            <div className="share-row" style={{animationDelay:'0.9s'}}>
-              <button className="btn-share-story" onClick={()=>shareImprintCards(imprint).then(n=>showToast(`✦  ${n} карточки сохранены`))}><span>✦</span><span>{t.btnShareImprint}</span></button>
-              <button className="btn-share-copy" onClick={()=>copyToClipboard(imprintText)}><span>⎘</span><span>{t.btnCopyImprint}</span></button>
+            <div style={{display:'flex',gap:10,width:'100%',marginTop:16}}>
+              <button className="btn-share-story" style={{flex:1}} onClick={handleShareImprint}><span>✦</span><span>{t.btnShareImprint}</span></button>
+              <button className="btn-share-copy" style={{flex:1}} onClick={()=>copyToClipboard(imprintText)}><span>⎘</span><span>{t.btnCopyImprint}</span></button>
             </div>
-            <button className="btn-ghost" onClick={restart} style={{animationDelay:'1.1s'}}><span>{t.btnRestart}</span></button>
+            <button className="btn-ghost" style={{marginTop:16}} onClick={restart}><span>{t.btnRestart}</span></button>
           </div>
         )}
 
