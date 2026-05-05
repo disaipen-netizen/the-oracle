@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import './oracle.css'
-import { shareDialogCards, shareImprintCards, shareResultCard } from './shareCards.js'
+import { generateResultCard, generateDialogCards, generateImprintCards, shareSingleCard } from './shareCards.js'
 
 const G = '#c9a84c'
 const dg = o => `rgba(201,168,76,${o})`
@@ -309,27 +309,41 @@ export default function App(){
     setShadowHistory([]);setShadowIteration(0);setImprint(null);setShadowDone(false)
   }
 
-  // Share handlers — все async, вызываются напрямую
-  async function handleShareResult(){
-    try{
-      await shareResultCard(result, resultCards, lang)
-    }catch(e){ copyToClipboard([`THE ORACLE — ${resultCards.map(c=>c.name).join(' · ')}`,result?.grid,result?.blind,result?.action,`✦ ${result?.shadow}`].join('\n\n')) }
+  // Share preview modal state
+  const [previewCards, setPreviewCards] = useState(null) // null или [{canvas, name, label}]
+
+  function handleShareResult(){
+    const cards = generateResultCard(result, resultCards, lang)
+    setPreviewCards(cards)
   }
 
-  async function handleShareDialog(){
-    try{
-      const n = await shareDialogCards(shadowHistory, shadowVoiceName)
-      showToast(`✦  ${n} карточки сохранены`)
-    }catch(e){ showToast('Не удалось поделиться') }
+  function handleShareDialog(){
+    const cards = generateDialogCards(shadowHistory, shadowVoiceName)
+    if(cards.length === 0){ showToast('Диалог пустой'); return }
+    setPreviewCards(cards)
   }
 
-  async function handleShareImprint(){
+  function handleShareImprint(){
     if(!imprint){showToast('Слепок ещё не готов');return}
-    try{
-      const n = await shareImprintCards(imprint)
-      showToast(`✦  ${n} карточки сохранены`)
-    }catch(e){ showToast('Не удалось поделиться') }
+    const cards = generateImprintCards(imprint)
+    setPreviewCards(cards)
   }
+
+  async function handleSaveCard(card){
+    const result = await shareSingleCard(card.canvas, card.name)
+    if(result === 'downloaded') showToast('✓  Сохранено в Загрузки')
+  }
+
+  // Когда модалка открывается, показываем preview через dataURL
+  useEffect(()=>{
+    if(!previewCards) return
+    setTimeout(()=>{
+      previewCards.forEach((c, i) => {
+        const img = document.getElementById(`preview-img-${i}`)
+        if(img) img.src = c.canvas.toDataURL('image/png')
+      })
+    }, 50)
+  }, [previewCards])
 
   const dialogText=shadowHistory.length?[`АУДИЕНЦИЯ С ТЕНЬЮ · ${shadowVoiceName}`,'',...shadowHistory.map(h=>`${h.role==='assistant'?shadowVoiceName:'Я'}: ${h.content}`),'','theoracle.app'].join('\n'):''
   const imprintText=imprint?[`ЦИФРОВОЙ СЛЕПОК · ${imprint?.archetype}`,'',imprint?.resource,'',imprint?.block,'',`✦ ${imprint?.growth}`].join('\n'):''
@@ -481,6 +495,7 @@ export default function App(){
                   <div className="btn-shadow-content"><span className="btn-shadow-title">{t.btnGetImprint}</span><span className="btn-shadow-sub">Твой архетипический портрет</span></div>
                   <span className="btn-shadow-arrow">→</span>
                 </button>
+                <button className="btn-ghost" style={{marginTop:12,display:'block',width:'100%'}} onClick={restart}><span>{t.btnRestart}</span></button>
               </div>
             )}
           </div>
@@ -514,6 +529,85 @@ export default function App(){
 
       </div>
       <div className={`toast${toast?' show':''}`}>{toast}</div>
+
+      {/* Preview Modal — показывает карточки и позволяет скачать каждую */}
+      {previewCards && (
+        <div onClick={()=>setPreviewCards(null)} style={{
+          position:'fixed',top:0,left:0,right:0,bottom:0,
+          background:'rgba(0,0,0,0.92)',zIndex:1000,
+          overflowY:'auto',padding:'20px 16px',
+          backdropFilter:'blur(8px)',
+        }}>
+          <div onClick={e=>e.stopPropagation()} style={{maxWidth:520,margin:'0 auto'}}>
+            <div style={{
+              display:'flex',alignItems:'center',justifyContent:'space-between',
+              marginBottom:20,padding:'4px 0'
+            }}>
+              <span style={{
+                color:'#c9a84c',fontSize:14,letterSpacing:'0.18em',
+                fontFamily:'Tenor Sans,sans-serif',textTransform:'uppercase'
+              }}>{previewCards.length===1?'Твоя карточка':`${previewCards.length} карточки`}</span>
+              <button onClick={()=>setPreviewCards(null)} style={{
+                background:'transparent',border:'1px solid rgba(201,168,76,0.3)',
+                color:'#c9a84c',width:32,height:32,borderRadius:'50%',
+                fontSize:18,cursor:'pointer',padding:0,
+              }}>×</button>
+            </div>
+
+            <div style={{
+              padding:'14px 16px',marginBottom:18,
+              background:'rgba(201,168,76,0.08)',
+              border:'1px solid rgba(201,168,76,0.25)',
+              borderRadius:6,
+              color:'#f0e8d6',fontSize:13,lineHeight:1.5,
+              fontFamily:'Tenor Sans,sans-serif',
+            }}>
+              ✦  Нажми на карточку чтобы сохранить или поделиться. На iPhone каждую можно сохранить отдельно — потом загрузишь все в Stories каруселью.
+            </div>
+
+            {previewCards.map((card,i)=>(
+              <div key={i} style={{marginBottom:18}}>
+                {previewCards.length>1 && (
+                  <div style={{
+                    color:'rgba(201,168,76,0.7)',fontSize:11,letterSpacing:'0.2em',
+                    fontFamily:'Tenor Sans,sans-serif',textTransform:'uppercase',
+                    marginBottom:8,padding:'0 4px'
+                  }}>{card.label}</div>
+                )}
+                <div style={{
+                  position:'relative',borderRadius:8,overflow:'hidden',
+                  border:'1px solid rgba(201,168,76,0.25)',
+                  background:'#0b0a17',
+                }}>
+                  <img id={`preview-img-${i}`} alt={card.label} style={{
+                    display:'block',width:'100%',height:'auto'
+                  }}/>
+                  <button onClick={()=>handleSaveCard(card)} style={{
+                    position:'absolute',bottom:12,right:12,
+                    background:'linear-gradient(135deg, #c9a84c, #a8893a)',
+                    color:'#0b0a17',border:'none',
+                    padding:'10px 18px',borderRadius:30,
+                    fontSize:12,fontWeight:600,letterSpacing:'0.15em',
+                    fontFamily:'Tenor Sans,sans-serif',textTransform:'uppercase',
+                    cursor:'pointer',
+                    boxShadow:'0 4px 20px rgba(201,168,76,0.4)',
+                  }}>✦ Сохранить</button>
+                </div>
+              </div>
+            ))}
+
+            <button onClick={()=>setPreviewCards(null)} style={{
+              width:'100%',padding:'14px',marginTop:8,
+              background:'transparent',
+              border:'1px solid rgba(201,168,76,0.3)',
+              color:'rgba(240,232,214,0.8)',
+              borderRadius:4,fontSize:12,letterSpacing:'0.2em',
+              fontFamily:'Tenor Sans,sans-serif',textTransform:'uppercase',
+              cursor:'pointer',
+            }}>Закрыть</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
