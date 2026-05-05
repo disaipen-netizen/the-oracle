@@ -1,4 +1,5 @@
-// shareCards.js — генерация PNG карточек для шеринга (iOS-совместимо)
+// shareCards.js — генерация PNG карточек для шеринга
+// iOS-стратегия: каждый шеринг = отдельный user gesture
 
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath()
@@ -45,26 +46,10 @@ function drawWatermark(ctx, W, H) {
   ctx.fillText('theoracle.app', W/2, H-52)
 }
 
-// ── КЛЮЧЕВАЯ ФУНКЦИЯ: blob до share ──
-async function canvasToBlob(canvas) {
-  return new Promise(r=>canvas.toBlob(r,'image/png'))
-}
+// ── ГЕНЕРАЦИЯ ВСЕХ КАРТОЧЕК ВОЗВРАЩАЕТ МАССИВ DATA URL ──
+// Это безопасно — никакого navigator.share, только превью
 
-async function shareFile(blob, filename, title) {
-  const file=new File([blob], filename, {type:'image/png'})
-  if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
-    try{ await navigator.share({files:[file], title}); return true }catch(e){}
-  }
-  // fallback — скачать
-  const url=URL.createObjectURL(blob)
-  const a=document.createElement('a'); a.href=url; a.download=filename
-  document.body.appendChild(a); a.click(); document.body.removeChild(a)
-  setTimeout(()=>URL.revokeObjectURL(url),1000)
-  return false
-}
-
-// ── РАСКЛАД — одна карточка ──
-export async function shareResultCard(result, cards, lang) {
+export function generateResultCard(result, cards, lang) {
   const W=1080, H=1920, PAD=72, MW=W-PAD*2
   const canvas=document.createElement('canvas'); canvas.width=W; canvas.height=H
   const ctx=canvas.getContext('2d')
@@ -121,8 +106,8 @@ export async function shareResultCard(result, cards, lang) {
   ].filter(b=>b.text)
 
   for(const b of blocks){
-    const lines=wrapLines(ctx,b.text,'300 34px Georgia,serif',MW-48)
-    const bH=lines.length*52+66
+    const lines=wrapLines(ctx,b.text,'300 30px Georgia,serif',MW-48)
+    const bH=lines.length*46+66
     ctx.fillStyle='rgba(201,168,76,0.04)'
     roundRect(ctx,PAD,y,MW,bH,8); ctx.fill()
     ctx.strokeStyle='rgba(201,168,76,0.2)'; ctx.lineWidth=1
@@ -131,14 +116,14 @@ export async function shareResultCard(result, cards, lang) {
     ctx.fillText(b.label, PAD+20, y+28)
     ctx.strokeStyle='rgba(201,168,76,0.12)'; ctx.lineWidth=0.8
     ctx.beginPath(); ctx.moveTo(PAD+20,y+36); ctx.lineTo(PAD+MW-20,y+36); ctx.stroke()
-    ctx.font='300 34px Georgia,serif'; ctx.fillStyle='#ede5d3'
-    lines.forEach((l,i)=>ctx.fillText(l,PAD+20,y+56+i*52))
+    ctx.font='300 30px Georgia,serif'; ctx.fillStyle='#ede5d3'
+    lines.forEach((l,i)=>ctx.fillText(l,PAD+20,y+56+i*46))
     y+=bH+16
   }
 
   if(result?.shadow){
-    const lines=wrapLines(ctx,result.shadow,'italic 300 36px Georgia,serif',MW-60)
-    const bH=lines.length*56+80
+    const lines=wrapLines(ctx,result.shadow,'italic 300 32px Georgia,serif',MW-60)
+    const bH=lines.length*50+80
     ctx.fillStyle='rgba(201,168,76,0.06)'
     roundRect(ctx,PAD,y,MW,bH,8); ctx.fill()
     ctx.strokeStyle='rgba(201,168,76,0.35)'; ctx.lineWidth=1.2
@@ -147,35 +132,84 @@ export async function shareResultCard(result, cards, lang) {
     ctx.fillText('✦  ВОПРОС ДЛЯ ТВОЕЙ ТЕНИ  ✦', W/2, y+34)
     ctx.strokeStyle='rgba(201,168,76,0.15)'; ctx.lineWidth=0.8
     ctx.beginPath(); ctx.moveTo(PAD+20,y+44); ctx.lineTo(PAD+MW-20,y+44); ctx.stroke()
-    ctx.font='italic 300 36px Georgia,serif'; ctx.fillStyle='#f5ede0'
-    lines.forEach((l,i)=>ctx.fillText(l,W/2,y+64+i*56))
+    ctx.font='italic 300 32px Georgia,serif'; ctx.fillStyle='#f5ede0'
+    lines.forEach((l,i)=>ctx.fillText(l,W/2,y+64+i*50))
   }
 
   drawWatermark(ctx,W,H)
-  const blob=await canvasToBlob(canvas)
-  await shareFile(blob,'oracle-reading.png','THE ORACLE · Мой расклад')
+  return [{ canvas, name: 'oracle-reading.png', label: 'Расклад' }]
 }
 
-// ── ДИАЛОГ — по 3 сообщения на карточку ──
-export async function shareDialogCards(shadowHistory, voiceName) {
-  if(!shadowHistory.length) return 0
+export function generateDialogCards(shadowHistory, voiceName) {
+  if(!shadowHistory.length) return []
   const chunks=[]
   for(let i=0;i<shadowHistory.length;i+=3) chunks.push(shadowHistory.slice(i,i+3))
 
-  for(let ci=0;ci<chunks.length;ci++){
-    const canvas=buildDialogCard(chunks[ci], voiceName, ci+1, chunks.length)
-    const blob=await canvasToBlob(canvas)
-    await shareFile(blob, `oracle-dialog-${ci+1}.png`, `THE ORACLE · Диалог ${ci+1}/${chunks.length}`)
-    if(ci<chunks.length-1) await new Promise(r=>setTimeout(r,600))
-  }
-  return chunks.length
+  return chunks.map((msgs, ci) => ({
+    canvas: buildDialogCard(msgs, voiceName, ci+1, chunks.length),
+    name: `oracle-dialog-${ci+1}.png`,
+    label: `Часть ${ci+1}/${chunks.length}`
+  }))
 }
 
+export function generateImprintCards(imprint) {
+  const cardDefs=[
+    {label:'Скрытый ресурс',    text:imprint.resource, isGrowth:false},
+    {label:'Системный блок',    text:imprint.block,    isGrowth:false},
+    {label:'Следующая точка роста', text:imprint.growth, isGrowth:true},
+  ].filter(c=>c.text)
+
+  return cardDefs.map((c,i) => ({
+    canvas: buildImprintCard(imprint.archetype, c.label, c.text, i+1, cardDefs.length, c.isGrowth),
+    name: `oracle-imprint-${i+1}.png`,
+    label: c.label
+  }))
+}
+
+// ── ШЕРИНГ ОДНОЙ КАРТОЧКИ — вызывается прямо из onClick ──
+export async function shareSingleCard(canvas, filename) {
+  // Сначала пробуем Telegram WebApp API если доступен
+  const tg = window.Telegram?.WebApp
+  if (tg?.openTelegramLink) {
+    // Telegram не имеет прямого API для шеринга файлов
+    // но мы используем системный share через браузер
+  }
+
+  return new Promise((resolve) => {
+    canvas.toBlob(async (blob) => {
+      const file = new File([blob], filename, { type: 'image/png' })
+
+      // Пробуем системный share с файлом
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: 'THE ORACLE' })
+          resolve('shared')
+          return
+        } catch (e) {
+          // Пользователь отменил или error — пробуем скачать
+        }
+      }
+
+      // Fallback — скачивание (работает везде)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      resolve('downloaded')
+    }, 'image/png')
+  })
+}
+
+// === Build dialog card ===
 function buildDialogCard(msgs, voiceName, cardNum, totalCards) {
   const W=1080, PAD=80, MW=W-PAD*2
-  const FONT_MSG='italic 300 32px Georgia,serif'
-  const FONT_LABEL='500 20px Tenor Sans,Arial,sans-serif'
-  const LH=48
+  const FONT_MSG='italic 300 28px Georgia,serif'
+  const FONT_LABEL='500 18px Tenor Sans,Arial,sans-serif'
+  const LH=42
 
   const tmp=document.createElement('canvas'); tmp.width=W; tmp.height=100
   const tc=tmp.getContext('2d')
@@ -244,27 +278,11 @@ function buildDialogCard(msgs, voiceName, cardNum, totalCards) {
   return canvas
 }
 
-// ── СЛЕПОК — 3 карточки ──
-export async function shareImprintCards(imprint) {
-  const cards=[
-    {label:'Скрытый ресурс',    text:imprint.resource, isGrowth:false},
-    {label:'Системный блок',    text:imprint.block,    isGrowth:false},
-    {label:'Следующая точка роста', text:imprint.growth, isGrowth:true},
-  ].filter(c=>c.text)
-
-  for(let i=0;i<cards.length;i++){
-    const canvas=buildImprintCard(imprint.archetype, cards[i].label, cards[i].text, i+1, cards.length, cards[i].isGrowth)
-    const blob=await canvasToBlob(canvas)
-    await shareFile(blob, `oracle-imprint-${i+1}.png`, `Цифровой слепок ${i+1}/${cards.length}`)
-    if(i<cards.length-1) await new Promise(r=>setTimeout(r,600))
-  }
-  return cards.length
-}
-
+// === Build imprint card ===
 function buildImprintCard(archetype, label, text, cardNum, total, isGrowth) {
   const W=1080, PAD=72, MW=W-PAD*2
-  const FONT=isGrowth?'italic 300 38px Georgia,serif':'300 36px Georgia,serif'
-  const LH=isGrowth?58:54
+  const FONT=isGrowth?'italic 300 36px Georgia,serif':'300 34px Georgia,serif'
+  const LH=isGrowth?54:50
 
   const tmp=document.createElement('canvas'); tmp.width=W; tmp.height=100
   const tc=tmp.getContext('2d')
